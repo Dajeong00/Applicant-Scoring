@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서류전형 자동채점 시스템</title>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+:root,[data-theme="light"]{
+  --bg:#f7f6f2;--surface:#f9f8f5;--surface-2:#ffffff;--surface-off:#f0efe9;
+  --border:#d4d1ca;--divider:#e0ddd7;
+  --text:#28251d;--text-muted:#7a7974;--text-faint:#bab9b4;
+  --primary:#01696f;--primary-hover:#0c4e54;--primary-light:#e8f4f5;
+  --success:#437a22;--success-light:#d4dfcc;
+  --warning:#964219;--warning-light:#ddcfc6;
+  --error:#a12c7b;--error-light:#e0ced7;
+  --shadow-sm:0 1px 3px rgba(40,37,29,.07);
+  --shadow-md:0 4px 16px rgba(40,37,29,.09);
+  --shadow-lg:0 12px 40px rgba(40,37,29,.13);
+  --radius:0.5rem;--radius-lg:0.75rem;--radius-full:9999px;
+}
+[data-theme="dark"]{
+  --bg:#171614;--surface:#1c1b19;--surface-2:#222120;--surface-off:#1d1c1a;
+  --border:#393836;--divider:#262523;
+  --text:#cdccca;--text-muted:#797876;--text-faint:#5a5957;
+  --primary:#4f98a3;--primary-hover:#227f8b;--primary-light:#313b3b;
+  --success:#6daa45;--success-light:#3a4435;
+  --warning:#bb653b;--warning-light:#564942;
+  --error:#d163a7;--error-light:#4c3d46;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.2);--shadow-md:0 4px 16px rgba(0,0,0,.3);--shadow-lg:0 12px 40px rgba(0,0,0,.4);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;font-size:15px;height:100%}
+body{font-family:'Satoshi','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;height:100%;line-height:1.6;overflow:hidden}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit}
+input,select{font-family:inherit}
+/* Layout */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm)}
+.header-inner{max-width:1400px;margin:0 auto;padding:0 1.5rem;height:56px;display:flex;align-items:center;gap:1rem}
+.logo{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1rem;color:var(--text)}
+.logo svg{color:var(--primary)}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:.5rem}
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 1.5rem;max-width:1400px;margin:0 auto;width:100%;padding-top:.5rem}
+.tab{padding:.5rem 1rem;font-size:.875rem;font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;transition:all .18s;cursor:pointer;white-space:nowrap}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab:hover:not(.active){color:var(--text)}
+/* Main */
+.main{max-width:1400px;margin:0 auto;padding:.75rem 1.25rem 1rem;flex:1;width:100%;overflow:auto}
+/* KPI cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;box-shadow:var(--shadow-sm)}
+.kpi-label{font-size:.75rem;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem}
+.kpi-value{font-size:1.75rem;font-weight:700;color:var(--text);line-height:1.1}
+.kpi-sub{font-size:.75rem;color:var(--text-muted);margin-top:.2rem}
+/* Filters */
+.filter-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;box-shadow:var(--shadow-sm)}
+.filter-group{display:flex;flex-direction:column;gap:.3rem;min-width:140px}
+.filter-label{font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+.filter-group input,.filter-group select{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:.4rem .75rem;font-size:.875rem;color:var(--text);outline:none;
+  transition:border-color .18s;
+}
+.filter-group input:focus,.filter-group select:focus{border-color:var(--primary)}
+.btn{padding:.4rem 1rem;border-radius:var(--radius);font-size:.875rem;font-weight:600;transition:all .18s;display:inline-flex;align-items:center;gap:.4rem}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-ghost{border:1px solid var(--border);color:var(--text-muted)}
+.btn-ghost:hover{background:var(--surface-off);color:var(--text)}
+.btn-sm{padding:.3rem .75rem;font-size:.8rem}
+/* Table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
+.table-header{padding:.75rem 1.25rem;display:flex;align-items:center;gap:.75rem;border-bottom:1px solid var(--divider)}
+.table-title{font-weight:700;font-size:.9rem}
+.table-count{font-size:.8rem;color:var(--text-muted)}
+.table-actions{margin-left:auto;display:flex;gap:.5rem}
+.tbl-outer{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead{background:var(--surface-off)}
+th{padding:.6rem .85rem;text-align:left;font-weight:600;font-size:.75rem;color:var(--text-muted);white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--text)}
+td{padding:.55rem .85rem;border-bottom:1px solid var(--divider);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface-off)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:var(--radius-full);font-size:.75rem;font-weight:700;background:var(--surface-off);color:var(--text-muted)}
+.rank-badge.gold{background:#fef3c7;color:#92400e}
+.rank-badge.silver{background:#f1f5f9;color:#475569}
+.rank-badge.bronze{background:#fef2e6;color:#92400e}
+.score-bar{display:flex;align-items:center;gap:.5rem}
+.score-bar-track{width:80px;height:6px;background:var(--divider);border-radius:3px;overflow:hidden;flex-shrink:0}
+.score-bar-fill{height:100%;border-radius:3px;background:var(--primary);transition:width .3s}
+.score-bar-fill.high{background:#437a22}
+.score-bar-fill.mid{background:#01696f}
+.score-bar-fill.low{background:#964219}
+.score-bar-fill.fail{background:#a12c7b}
+.badge{display:inline-block;padding:.15rem .55rem;border-radius:var(--radius-full);font-size:.72rem;font-weight:700;white-space:nowrap}
+.badge-1군{background:#fef3c7;color:#92400e}
+.badge-1\.5군{background:#ede9fe;color:#5b21b6}
+.badge-2군{background:#dcfce7;color:#166534}
+.badge-3군{background:#e0f2fe;color:#075985}
+.badge-4군{background:#f1f5f9;color:#475569}
+.badge-기타{background:var(--surface-off);color:var(--text-muted)}
+.badge-pass{background:var(--success-light);color:var(--success)}
+.badge-review{background:#fef9c3;color:#854d0e}
+.badge-fail{background:var(--error-light);color:var(--error)}
+.badge-dropout{background:var(--warning-light);color:var(--warning)}
+/* pagination */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-top:1px solid var(--divider);font-size:.8rem;color:var(--text-muted)}
+.page-btns{display:flex;gap:.25rem}
+.page-btn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);font-size:.8rem;font-weight:500;color:var(--text-muted);border:1px solid var(--border);background:var(--surface)}
+.page-btn:hover:not(:disabled){background:var(--surface-off);color:var(--text)}
+.page-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.page-btn:disabled{opacity:.4;cursor:default}
+/* Score detail drawer */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;right:-480px;top:0;bottom:0;width:480px;max-width:100vw;background:var(--surface);box-shadow:var(--shadow-lg);z-index:201;transition:right .28s cubic-bezier(.16,1,.3,1);overflow-y:auto;padding:1.5rem}
+.drawer.open{right:0}
+.drawer-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--divider)}
+.drawer-name{font-size:1.25rem;font-weight:700}
+.drawer-sub{font-size:.85rem;color:var(--text-muted);margin-top:.1rem}
+.drawer-close{margin-left:auto;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);border:1px solid var(--border);flex-shrink:0}
+.drawer-close:hover{background:var(--surface-off)}
+.score-section{margin-bottom:1.25rem}
+.score-section-title{font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem}
+.score-row{display:flex;align-items:center;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--divider)}
+.score-row:last-child{border-bottom:none}
+.score-row-label{font-size:.85rem;color:var(--text-muted)}
+.score-row-value{font-size:.85rem;font-weight:700;color:var(--text)}
+.score-row-detail{font-size:.75rem;color:var(--text-faint);margin-top:.1rem}
+.total-score-box{background:var(--primary);color:#fff;border-radius:var(--radius-lg);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.total-score-num{font-size:2.5rem;font-weight:700;line-height:1}
+.total-score-label{font-size:.85rem;opacity:.85}
+/* Chart tab */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+@media(max-width:800px){.chart-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;box-shadow:var(--shadow-sm)}
+.chart-title{font-size:.85rem;font-weight:700;color:var(--text-muted);margin-bottom:1rem;text-transform:uppercase;letter-spacing:.04em}
+.bar-chart{display:flex;flex-direction:column;gap:.5rem}
+.bar-row{display:flex;align-items:center;gap:.75rem;font-size:.8rem}
+.bar-row-label{width:130px;text-align:right;color:var(--text-muted);flex-shrink:0;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:20px;background:var(--divider);border-radius:3px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:3px;background:var(--primary);transition:width .5s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
+.bar-fill span{font-size:.68rem;font-weight:700;color:#fff;white-space:nowrap}
+.score-dist{display:flex;flex-direction:column;gap:.35rem}
+.dist-row{display:flex;align-items:center;gap:.5rem;font-size:.8rem}
+.dist-label{width:80px;text-align:right;color:var(--text-muted);font-size:.78rem}
+/* Theme toggle */
+.theme-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);border:1px solid var(--border);color:var(--text-muted)}
+.theme-btn:hover{background:var(--surface-off);color:var(--text)}
+/* Criteria tab */
+.criteria-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem}
+.criteria-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;box-shadow:var(--shadow-sm)}
+.criteria-card-title{font-size:.9rem;font-weight:700;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem}
+.criteria-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.criteria-table th{background:var(--surface-off);padding:.4rem .6rem;text-align:left;font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase}
+.criteria-table td{padding:.4rem .6rem;border-bottom:1px solid var(--divider)}
+.criteria-table tr:last-child td{border-bottom:none}
+.criteria-table .pts{font-weight:700;color:var(--primary)}
+.page-view{display:none}
+.page-view.active{display:block}
+
+/* Job compare & top10 */
+.job-compare-wrap{display:flex;flex-direction:column;gap:.5rem}
+.job-compare-row{display:grid;grid-template-columns:70px 1fr 1fr;gap:.5rem;align-items:center;font-size:.78rem}
+.job-label{color:var(--text-muted);font-weight:600;text-align:right}
+.job-bar-group{display:flex;flex-direction:column;gap:3px}
+.job-bar-track{height:12px;background:var(--divider);border-radius:3px;overflow:hidden;position:relative}
+.job-bar-fill-mech{height:100%;border-radius:3px;background:var(--primary);transition:width .5s}
+.job-bar-fill-safe{height:100%;border-radius:3px;background:var(--success);transition:width .5s}
+.job-bar-count{font-size:.7rem;font-weight:700;color:var(--text-muted);text-align:center;margin-top:1px}
+.job-legend{display:flex;gap:1rem;font-size:.74rem;color:var(--text-muted);margin-bottom:.75rem}
+.job-legend span{display:flex;align-items:center;gap:.3rem}
+.job-legend-dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+.top10-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.top10-table th{background:var(--surface-off);padding:.4rem .65rem;text-align:left;font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+.top10-table td{padding:.42rem .65rem;border-bottom:1px solid var(--divider);vertical-align:middle;white-space:nowrap}
+.top10-table tr:last-child td{border-bottom:none}
+.top10-table tr:hover td{background:var(--surface-off)}
+.mini-rank{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:var(--radius-full);font-size:.7rem;font-weight:700;background:var(--surface-off);color:var(--text-muted)}
+.mini-rank.gold{background:#fef3c7;color:#92400e}
+.mini-rank.silver{background:#f1f5f9;color:#475569}
+.mini-rank.bronze{background:#fef2e6;color:#b45309}
+.mini-score-bar{display:flex;align-items:center;gap:.4rem}
+.mini-score-track{width:60px;height:5px;background:var(--divider);border-radius:3px;overflow:hidden;flex-shrink:0}
+.mini-score-fill{height:100%;border-radius:3px;background:var(--primary)}
+
+
+/* Upload tab */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius-lg);padding:2rem 1.25rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface)}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--primary);background:var(--primary-light)}
+.upload-icon{font-size:2.3rem;margin-bottom:.5rem;line-height:1}
+.upload-title{font-size:1rem;font-weight:700;margin-bottom:.25rem}
+.upload-sub{font-size:.78rem;color:var(--text-muted);line-height:1.5}
+.upload-progress{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1rem;margin-top:.75rem;display:none;flex-shrink:0}
+.progress-bar-wrap{height:8px;background:var(--divider);border-radius:4px;overflow:hidden;margin:.75rem 0}
+.progress-bar-inner{height:100%;background:var(--primary);border-radius:4px;width:0;transition:width .3s}
+.upload-log{font-size:.75rem;color:var(--text-muted);max-height:88px;overflow-y:auto;margin-top:.4rem;line-height:1.5}
+.upload-log span{display:block}
+.upload-log .ok{color:var(--success)}
+.upload-log .warn{color:var(--warning)}
+.col-map-table{width:100%;font-size:.82rem;border-collapse:collapse}
+.col-map-table th{background:var(--surface-off);padding:.4rem .75rem;text-align:left;font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase}
+.col-map-table td{padding:.4rem .75rem;border-bottom:1px solid var(--divider);vertical-align:middle}
+.col-map-table select{font-size:.8rem;padding:.2rem .4rem;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);max-width:200px}
+
+
+
+  #page-upload > div{min-height:0}
+}
+
+  #page-upload > div{grid-template-columns:1fr; height:auto}
+  body{overflow:auto}
+  .app{height:auto;overflow:visible}
+  .main{overflow:visible}
+}
+
+
+/* Criteria customization */
+.score-input{width:44px;border:1.5px solid var(--border);border-radius:6px;padding:.18rem .3rem;font-size:.85rem;font-weight:700;text-align:center;background:var(--surface-2);color:var(--text);transition:border-color .15s,box-shadow .15s;-moz-appearance:textfield}
+.score-input::-webkit-inner-spin-button,.score-input::-webkit-outer-spin-button{-webkit-appearance:none}
+.score-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(1,105,111,.15)}
+.score-input:hover:not(:focus){border-color:var(--primary)}
+.diff-up{color:var(--success);font-weight:700}
+.diff-down{color:var(--error);font-weight:700}
+.diff-same{color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      서류전형 자동채점
+    </div>
+    <span style="font-size:.78rem;color:var(--text-faint);background:var(--surface-off);padding:.2rem .6rem;border-radius:var(--radius-full)">'26상반기</span>
+    <div class="header-actions">
+      <button class="theme-btn" data-theme-toggle aria-label="테마 전환" onclick="toggleTheme()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div style="background:var(--surface);border-bottom:1px solid var(--border)">
+  <div style="max-width:1400px;margin:0 auto;padding:0 1.5rem;display:flex;gap:0">
+    <button class="tab" onclick="showPage('dashboard')">📊 대시보드</button>
+    <button class="tab" onclick="showPage('results')">🏆 채점 결과</button>
+    <button class="tab" onclick="showPage('criteria')">📋 배점 기준</button>
+    <button class="tab active" onclick="showPage('upload')">📂 엑셀 업로드</button>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- 대시보드 -->
+<div id="page-dashboard" class="page-view">
+  <!-- 업로드 데이터 사용 중 배지 -->
+  <div id="data-source-badge" style="display:none;align-items:center;gap:.5rem;padding:.5rem .9rem;margin-bottom:.75rem;background:color-mix(in oklab,var(--primary) 10%,var(--surface));border:1px solid color-mix(in oklab,var(--primary) 25%,var(--border));border-radius:var(--radius);font-size:.8rem;color:var(--primary);font-weight:600">
+    <span>🔗</span><span>업로드 파일 데이터 반영 중</span>
+    <button onclick="resetToOriginal()" style="margin-left:auto;font-size:.75rem;color:var(--text-muted);background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:.15rem .5rem;cursor:pointer">원본 데이터로 복원</button>
+  </div>
+  <div class="kpi-grid" id="kpi-area"></div>
+
+  <!-- 직무 필터 탭 -->
+  <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.85rem">
+    <span style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">직무 필터</span>
+    <div style="display:flex;gap:.35rem">
+      <button id="job-tab-all" class="btn btn-primary btn-sm" onclick="setJobFilter('all')">전체</button>
+      <button id="job-tab-mech" class="btn btn-ghost btn-sm" onclick="setJobFilter('기계/전기')">기계/전기</button>
+      <button id="job-tab-safe" class="btn btn-ghost btn-sm" onclick="setJobFilter('안전')">안전</button>
+    </div>
+    <span id="job-filter-badge" style="font-size:.75rem;color:var(--text-muted);margin-left:.25rem"></span>
+  </div>
+
+  <!-- 기존 4개 차트 -->
+  <div class="chart-grid" style="margin-bottom:1.25rem">
+    <div class="chart-card">
+      <div class="chart-title">📊 점수 분포</div>
+      <div class="score-dist" id="chart-dist"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🏫 대학 등급별 지원자 수</div>
+      <div class="bar-chart" id="chart-uni"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🌐 어학 성적 분포</div>
+      <div class="bar-chart" id="chart-eng"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🎓 전공 구분별 분포</div>
+      <div class="bar-chart" id="chart-major"></div>
+    </div>
+  </div>
+
+  <!-- 새로 추가: 직무별 비교 + Top10 -->
+  <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:1.25rem">
+    <div class="chart-card">
+      <div class="chart-title">⚖️ 기계/전기 vs 안전 직무 비교</div>
+      <div class="job-legend">
+        <span><span class="job-legend-dot" style="background:var(--primary)"></span>기계/전기</span>
+        <span><span class="job-legend-dot" style="background:var(--success)"></span>안전</span>
+      </div>
+      <div class="job-compare-wrap" id="chart-job-compare"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🏆 합격권 Top 10</div>
+      <table class="top10-table">
+        <thead><tr><th>순위</th><th>이름</th><th>대학</th><th>직무</th><th>점수</th><th>상태</th></tr></thead>
+        <tbody id="chart-top10"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 채점 결과 -->
+<div id="page-results" class="page-view">
+  <!-- 업로드 데이터 사용 중 배지 (채점결과 탭) -->
+  <div id="results-source-badge" style="display:none;align-items:center;gap:.5rem;padding:.5rem .9rem;margin-bottom:.75rem;background:color-mix(in oklab,var(--primary) 10%,var(--surface));border:1px solid color-mix(in oklab,var(--primary) 25%,var(--border));border-radius:var(--radius);font-size:.8rem;color:var(--primary);font-weight:600">
+    <span>🔗</span><span>업로드 파일 데이터 반영 중</span>
+  </div>
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">이름 검색</span>
+      <input type="text" id="search-name" placeholder="성명 검색..." oninput="applyFilters()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">희망직무</span>
+      <select id="filter-job" onchange="applyFilters()">
+        <option value="">전체</option>
+        <option value="기계/전기">기계/전기</option>
+        <option value="안전">안전</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">대학 등급</span>
+      <select id="filter-tier" onchange="applyFilters()">
+        <option value="">전체</option>
+        <option value="1군">1군</option>
+        <option value="1.5군">1.5군</option>
+        <option value="2군">2군</option>
+        <option value="3군">3군</option>
+        <option value="4군">4군</option>
+        <option value="기타">기타</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">합격 여부</span>
+      <select id="filter-status" onchange="applyFilters()">
+        <option value="">전체</option>
+        <option value="pass">합격권 (70점+)</option>
+        <option value="review">검토 (55~69점)</option>
+        <option value="fail">탈락권 (~54점)</option>
+        <option value="dropout">학점 탈락</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">최소 점수</span>
+      <input type="number" id="filter-minscore" placeholder="0" min="0" max="122" oninput="applyFilters()" style="width:80px">
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetFilters()">초기화</button>
+    <button class="btn btn-primary btn-sm" onclick="exportCSV()" style="margin-left:auto">⬇ CSV 다운로드</button>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">채점 결과</span>
+      <span class="table-count" id="result-count"></span>
+      <div class="table-actions">
+        <select id="page-size" onchange="changePaging()" style="font-size:.8rem;padding:.25rem .5rem;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text)">
+          <option value="50">50개씩</option>
+          <option value="100">100개씩</option>
+          <option value="200">200개씩</option>
+        </select>
+      </div>
+    </div>
+    <div class="tbl-outer">
+      <table>
+        <thead>
+          <tr>
+            <th>순위</th>
+            <th class="sortable" onclick="sortBy('성명')">이름</th>
+            <th class="sortable" onclick="sortBy('희망직무')">직무</th>
+            <th class="sortable" onclick="sortBy('대학등급')">대학 / 등급</th>
+            <th class="sortable" onclick="sortBy('전공')">전공</th>
+            <th class="sortable" onclick="sortBy('학점')">학점</th>
+            <th class="sortable" onclick="sortBy('어학점수')">어학</th>
+            <th>자격증</th>
+            <th class="sortable" onclick="sortBy('총점')">총점 ↕</th>
+            <th>상태</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="result-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span id="page-info" style="font-size:.8rem;color:var(--text-muted)"></span>
+      <div class="page-btns" id="page-btns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 배점 기준 -->
+<div id="page-criteria" class="page-view">
+
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;background:var(--primary-light);border:1px solid var(--primary);border-radius:var(--radius-lg);padding:.7rem 1rem;flex-wrap:wrap">
+    <span style="font-size:1rem">✏️</span>
+    <span style="font-size:.85rem;color:var(--primary);font-weight:600">배점 기준을 직접 수정할 수 있습니다. 숫자를 클릭해 편집 후 <b>전체 재채점</b>을 눌러주세요.</span>
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <span id="criteria-changed-badge" style="display:none;font-size:.73rem;background:var(--warning);color:#fff;padding:.2rem .6rem;border-radius:var(--radius-full);font-weight:700">● 수정됨</span>
+      <button class="btn btn-primary btn-sm" onclick="recalculateAll()">🔄 전체 재채점</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetCriteria()">↩ 기본값으로</button>
+    </div>
+  </div>
+
+  <div class="criteria-grid">
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">🏫 출신 대학</div>
+      <table class="criteria-table">
+        <thead><tr><th>등급</th><th>대표 대학</th><th class="pts">점수</th></tr></thead>
+        <tbody>
+          <tr><td>1군</td><td style="font-size:.76rem;color:var(--text-muted)">금강대학교, 낙동대학교, 낙동대학교 - 광주캠퍼스, 낙동대학교 - 자연과학캠퍼스, 남강과학기술대학교</td><td class="pts"><input class="score-input" data-key="uni_1" type="number" value="40" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>1.5군</td><td style="font-size:.76rem;color:var(--text-muted)">남강과학기술대학교 - 영주캠퍼스, 남성대학교, 남성대학교 - 자연캠퍼스, 녹원전문대학, 녹원전문대학 - Vietnam 외 9개교</td><td class="pts"><input class="score-input" data-key="uni_15" type="number" value="36" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>2군</td><td style="font-size:.76rem;color:var(--text-muted)">백합예술대학교 - 경주캠퍼스, 백합예술대학교 - 서울캠퍼스, 백합예술대학교 - 칠암캠퍼스, 별빛대학교, 별빛대학교 - 용인캠퍼스 외 39개교</td><td class="pts"><input class="score-input" data-key="uni_2" type="number" value="32" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>3군</td><td style="font-size:.76rem;color:var(--text-muted)">태양과학기술대학교 - 대덕캠퍼스, 태양과학기술대학교 - 부산캠퍼스, 태양과학기술대학교 - 의왕캠퍼스, 태양과학기술대학교 - 춘천캠퍼스, 푸른대학교 외 4개교</td><td class="pts"><input class="score-input" data-key="uni_3" type="number" value="24" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>4군</td><td style="font-size:.76rem;color:var(--text-muted)">한강대학교, 한빛대학교, 한빛대학교 - 국제캠퍼스, 한빛대학교 - 서울캠퍼스, 한빛대학교 - 세종캠퍼스</td><td class="pts"><input class="score-input" data-key="uni_4" type="number" value="16" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>기타</td><td style="font-size:.76rem;color:var(--text-muted)">달빛예술대학교 - 밀양캠퍼스, 달빛예술대학교 - 천안캠퍼스, 동방대학교, 동방대학교 - 목포캠퍼스, 동방대학교 - 성심교정 외 3개교</td><td class="pts"><input class="score-input" data-key="uni_etc" type="number" value="8" onchange="onCriteriaChange()"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">📚 전공</div>
+      <table class="criteria-table">
+        <thead><tr><th>구분</th><th>해당 전공</th><th class="pts">점수</th></tr></thead>
+        <tbody>
+          <tr><td>동일 전공</td><td style="font-size:.76rem;color:var(--text-muted)">기계, 전기전자, 화공, 에너지, 소방, 토목 등</td><td class="pts"><input class="score-input" data-key="major_same" type="number" value="15" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>유관 전공</td><td style="font-size:.76rem;color:var(--text-muted)">IT, 컴퓨터, 통계, 경영, 환경, 물리 등</td><td class="pts"><input class="score-input" data-key="major_related" type="number" value="12" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>무관 전공</td><td style="font-size:.76rem;color:var(--text-muted)">인문, 사회, 언어 등 기타</td><td class="pts"><input class="score-input" data-key="major_other" type="number" value="7" onchange="onCriteriaChange()"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">📊 학점 <span style="font-size:.72rem;color:var(--text-muted);font-weight:400">— 커트라인 및 점수 수정 가능</span></div>
+      <table class="criteria-table">
+        <thead><tr><th>등급</th><th>커트라인 (이상)</th><th class="pts">최고점</th><th class="pts">중간점</th><th class="pts">기본점</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1군</td>
+            <td><input class="score-input" data-key="gpa_t1_thresh" type="number" step="0.1" value="3.6" style="width:50px" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t1_s1" type="number" value="15" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t1_s2" type="number" value="13" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t1_s3" type="number" value="9" onchange="onCriteriaChange()"></td>
+          </tr>
+          <tr>
+            <td>1.5/2군</td>
+            <td><input class="score-input" data-key="gpa_t2_thresh" type="number" step="0.1" value="4.0" style="width:50px" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t2_s1" type="number" value="15" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t2_s2" type="number" value="13" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t2_s3" type="number" value="9" onchange="onCriteriaChange()"></td>
+          </tr>
+          <tr>
+            <td>3군</td>
+            <td><input class="score-input" data-key="gpa_t3_thresh" type="number" step="0.1" value="4.3" style="width:50px" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t3_s1" type="number" value="15" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t3_s2" type="number" value="13" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t3_s3" type="number" value="9" onchange="onCriteriaChange()"></td>
+          </tr>
+          <tr>
+            <td>4군/기타</td>
+            <td><input class="score-input" data-key="gpa_t4_thresh" type="number" step="0.1" value="4.3" style="width:50px" onchange="onCriteriaChange()"></td>
+            <td class="pts"><input class="score-input" data-key="gpa_t4_s1" type="number" value="9" onchange="onCriteriaChange()"></td>
+            <td class="pts" style="font-size:.7rem;color:var(--error)">미만→탈락</td>
+            <td class="pts" style="color:var(--text-faint)">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">🌐 어학 <span style="font-size:.72rem;color:var(--text-muted);font-weight:400">— TOEIC 기준 및 배점 수정 가능</span></div>
+      <table class="criteria-table">
+        <thead><tr><th>등급</th><th>OPIc</th><th>TOEIC 기준점</th><th class="pts">배점</th></tr></thead>
+        <tbody>
+          <tr><td>S</td><td>AL</td><td><input class="score-input" data-key="eng_toeic_s" type="number" value="955" style="width:54px" onchange="onCriteriaChange()">+</td><td class="pts"><input class="score-input" data-key="eng_s" type="number" value="20" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>A</td><td>IH</td><td><input class="score-input" data-key="eng_toeic_a" type="number" value="915" style="width:54px" onchange="onCriteriaChange()">+</td><td class="pts"><input class="score-input" data-key="eng_a" type="number" value="17" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>B</td><td>IM3</td><td><input class="score-input" data-key="eng_toeic_b" type="number" value="815" style="width:54px" onchange="onCriteriaChange()">+</td><td class="pts"><input class="score-input" data-key="eng_b" type="number" value="14" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>C</td><td>IM2</td><td><input class="score-input" data-key="eng_toeic_c" type="number" value="720" style="width:54px" onchange="onCriteriaChange()">+</td><td class="pts"><input class="score-input" data-key="eng_c" type="number" value="11" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>D</td><td>IM1</td><td><input class="score-input" data-key="eng_toeic_d" type="number" value="550" style="width:54px" onchange="onCriteriaChange()">+</td><td class="pts"><input class="score-input" data-key="eng_d" type="number" value="8" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>X</td><td>IL이하</td><td>550 미만</td><td class="pts" style="color:var(--text-faint)">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">🔧 자격증</div>
+      <table class="criteria-table">
+        <thead><tr><th>등급</th><th>해당 자격증</th><th class="pts">점수</th></tr></thead>
+        <tbody>
+          <tr><td>기사급</td><td style="font-size:.76rem;color:var(--text-muted)">기계기사, 전기기사, 화공기사, 에너지관리기사 등</td><td class="pts"><input class="score-input" data-key="cert_a" type="number" value="10" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>산업기사</td><td style="font-size:.76rem;color:var(--text-muted)">전기산업기사, 화공산업기사, 가스산업기사 등</td><td class="pts"><input class="score-input" data-key="cert_b" type="number" value="8" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>기능사</td><td style="font-size:.76rem;color:var(--text-muted)">전기기능사, 가스기능사, 에너지관리기능사 등</td><td class="pts"><input class="score-input" data-key="cert_c" type="number" value="6" onchange="onCriteriaChange()"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="criteria-card">
+      <div class="criteria-card-title">💼 인턴 / 수상 / 석사</div>
+      <table class="criteria-table">
+        <thead><tr><th>항목</th><th>기준</th><th class="pts">점수</th></tr></thead>
+        <tbody>
+          <tr><td>인턴 (대기업)</td><td style="font-size:.76rem;color:var(--text-muted)">한화, 삼성, SK, LG, 현대 등</td><td class="pts"><input class="score-input" data-key="intern_big" type="number" value="10" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>인턴 (기타)</td><td style="font-size:.76rem;color:var(--text-muted)">기타 기업 인턴 경험</td><td class="pts"><input class="score-input" data-key="intern_etc" type="number" value="5" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>수상 (국가/기관)</td><td style="font-size:.76rem;color:var(--text-muted)">정부, 공단, 학회 주관</td><td class="pts"><input class="score-input" data-key="award_nat" type="number" value="7" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>수상 (교내)</td><td style="font-size:.76rem;color:var(--text-muted)">교내/기업 주관 수상</td><td class="pts"><input class="score-input" data-key="award_school" type="number" value="3" onchange="onCriteriaChange()"></td></tr>
+          <tr><td>석사 가산점</td><td style="font-size:.76rem;color:var(--text-muted)">석사 학위 보유 시</td><td class="pts"><input class="score-input" data-key="master_bonus" type="number" value="5" onchange="onCriteriaChange()"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div id="recalc-preview" style="display:none;margin-top:1.25rem">
+    <div class="table-wrap">
+      <div class="table-header" style="flex-wrap:wrap;gap:.5rem">
+        <span class="table-title">🔄 재채점 결과 미리보기</span>
+        <span id="recalc-count" class="table-count"></span>
+        <button class="btn btn-primary btn-sm" onclick="applyRecalc()" style="margin-left:auto">✅ 채점결과 탭에 반영</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('recalc-preview').style.display='none'">닫기</button>
+      </div>
+      <div class="tbl-outer">
+        <table>
+          <thead><tr><th>순위</th><th>이름</th><th>대학</th><th>기존 점수</th><th>새 점수</th><th>변화</th><th>상태</th></tr></thead>
+          <tbody id="recalc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- main -->
+</div><!-- app -->
+
+
+<!-- 엑셀 업로드 -->
+<div id="page-upload" class="page-view active">
+  <!-- 자동 연동 알림 배너 -->
+  <div id="upload-sync-banner" style="display:none;align-items:center;gap:.75rem;padding:.75rem 1.1rem;margin-bottom:.85rem;background:color-mix(in oklab,var(--primary) 12%,var(--surface));border:1px solid color-mix(in oklab,var(--primary) 30%,var(--border));border-radius:var(--radius);font-size:.86rem">
+    <span style="font-size:1.1rem">🔗</span>
+    <span>새 파일 채점 완료! <strong class="sync-count"></strong> 데이터가 <strong>대시보드</strong>와 <strong>채점결과</strong> 탭에 자동 반영됐습니다.</span>
+    <a href="#" onclick="event.preventDefault();document.querySelector('.tab[onclick*=dashboard]').click()" style="margin-left:auto;color:var(--primary);font-weight:600;text-decoration:none;white-space:nowrap">→ 대시보드 보기</a>
+    <a href="#" onclick="event.preventDefault();document.querySelector('.tab[onclick*=results]').click()" style="color:var(--primary);font-weight:600;text-decoration:none;white-space:nowrap">→ 채점결과 보기</a>
+    <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0 .25rem;line-height:1">✕</button>
+  </div>
+  <!-- Upload zone: full width, fixed height, always visible -->
+  <div style="display:flex;gap:1rem;align-items:stretch;margin-bottom:.75rem">
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)"
+         style="flex:1;min-height:240px;height:240px">
+      <div class="upload-icon" style="margin-bottom:.75rem">📂</div>
+      <div class="upload-title">지원자 엑셀 파일 업로드</div>
+      <div class="upload-sub">클릭하거나 파일을 드래그하세요<br>.xlsx / .xls 파일 지원</div>
+      <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileUpload(this.files[0])">
+    </div>
+    <div class="criteria-card" style="margin:0;padding:1rem 1.1rem;width:300px;flex-shrink:0;height:240px;overflow:auto">
+      <div class="criteria-card-title" style="margin-bottom:.55rem;font-size:.88rem">📌 업로드 사용법</div>
+      <div style="font-size:.76rem;color:var(--text-muted);line-height:1.55">
+        <p style="margin-bottom:.45rem">지원자 정보가 담긴 엑셀 파일을 업로드하면 자동으로 채점합니다.</p>
+        <b style="color:var(--text)">인식하는 컬럼명 예시:</b>
+        <ul style="margin:.35rem 0 .45rem 1rem;list-style:disc">
+          <li>성명(한글) / 성명</li>
+          <li>학사1학교명 / 출신대학</li>
+          <li>학사1전공 / 전공</li>
+          <li>학사1평균학점 / 학점</li>
+          <li>영어1시험명 / 영어1시험성적</li>
+          <li>자격면허1~4 / 인턴1직장명</li>
+          <li>수상명1 / 수여기관1 / 석사1학교명</li>
+        </ul>
+        <b style="color:var(--text)">컬럼명이 다른 경우:</b> 업로드 후 아래에서 매핑을 직접 설정할 수 있습니다.
+      </div>
+    </div>
+  </div>
+  <div class="upload-progress" id="upload-progress" style="margin-bottom:.75rem">
+    <div style="font-weight:600;font-size:.9rem" id="progress-title">처리 중...</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-inner" id="progress-bar"></div></div>
+    <div class="upload-log" id="upload-log"></div>
+  </div>
+
+  <!-- Column mapping -->
+  <div id="col-map-section" style="display:none;margin-bottom:1.25rem">
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-title">🗂 컬럼 매핑 설정</span>
+        <span style="font-size:.8rem;color:var(--text-muted);margin-left:.5rem">업로드된 컬럼과 채점 항목을 연결하세요</span>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="runScoringFromUpload()">▶ 채점 시작</button>
+      </div>
+      <div style="padding:1rem 1.25rem">
+        <table class="col-map-table">
+          <thead><tr><th>채점 항목</th><th>업로드 파일 컬럼 선택</th><th>설명</th></tr></thead>
+          <tbody id="col-map-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload results table -->
+  <div id="upload-result-section" style="display:none">
+    <div class="filter-bar" style="margin-bottom:1rem">
+      <div class="filter-group">
+        <span class="filter-label">이름 검색</span>
+        <input type="text" id="u-search-name" placeholder="성명 검색..." oninput="applyUploadFilters()">
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">합격 여부</span>
+        <select id="u-filter-status" onchange="applyUploadFilters()">
+          <option value="">전체</option>
+          <option value="pass">합격권 (70점+)</option>
+          <option value="review">검토 (55~69점)</option>
+          <option value="fail">탈락권</option>
+          <option value="dropout">학점탈락</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">최소 점수</span>
+        <input type="number" id="u-filter-minscore" placeholder="0" oninput="applyUploadFilters()" style="width:80px">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="resetUploadFilters()">초기화</button>
+      <button class="btn btn-primary btn-sm" onclick="exportUploadCSV()" style="margin-left:auto">⬇ CSV 다운로드</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-title">📊 채점 결과</span>
+        <span class="table-count" id="upload-result-count"></span>
+        <div class="table-actions">
+          <select id="u-page-size" onchange="changeUploadPaging()" style="font-size:.8rem;padding:.25rem .5rem;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text)">
+            <option value="50">50개씩</option>
+            <option value="100">100개씩</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-outer">
+        <table>
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th>이름</th>
+              <th>대학 / 등급</th>
+              <th>전공</th>
+              <th>학점</th>
+              <th>어학</th>
+              <th>자격증</th>
+              <th>인턴</th>
+              <th>수상</th>
+              <th>총점</th>
+              <th>상태</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="upload-result-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span id="u-page-info"></span>
+        <div class="page-btns" id="u-page-btns"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Detail Drawer -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div id="drawer-content"></div>
+</div>
+
+<script>
+const RAW = [];
+
+// Sort state
+// 원본 데이터 백업 (업로드 전 복원용)
+const RAW_ORIGINAL = [];
+
+function resetToOriginal(){
+  if(!confirm('원본 내장 데이터로 복원할까요? 업로드된 데이터가 초기화됩니다.')) return;
+  RAW.length = 0;
+  RAW_ORIGINAL.forEach(r => RAW.push({...r}));
+  filteredData = [...RAW];
+  uploadScoredData = [];
+  uploadFilteredData = [];
+  applyFilters();
+  renderDashboard();
+  const b1 = document.getElementById('data-source-badge');
+  const b2 = document.getElementById('results-source-badge');
+  if(b1) b1.style.display = 'none';
+  if(b2) b2.style.display = 'none';
+  const syncBanner = document.getElementById('upload-sync-banner');
+  if(syncBanner) syncBanner.style.display = 'none';
+  document.getElementById('upload-result-section').style.display = 'none';
+  alert('✅ 원본 데이터로 복원됐습니다.');
+}
+
+let sortKey = '총점', sortAsc = false;
+let currentPage = 1;
+let filteredData = [...RAW];
+
+// ── Theme ──
+function toggleTheme(){
+  const h = document.documentElement;
+  const t = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  h.setAttribute('data-theme', t);
+}
+
+// ── Pages ──
+function showPage(id){
+  document.querySelectorAll('.page-view').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(id==='dashboard') renderDashboard();
+  if(id==='results') applyFilters();
+  // 업로드 데이터 사용 중 배지 (대시보드/채점결과)
+  const badge = document.getElementById('data-source-badge');
+  if(badge) badge.style.display = uploadScoredData.length ? 'inline-flex' : 'none';
+  const badge2 = document.getElementById('results-source-badge');
+  if(badge2) badge2.style.display = uploadScoredData.length ? 'inline-flex' : 'none';
+}
+
+// ── Status ──
+function getStatus(row){
+  if(row['탈락여부']==='탈락') return 'dropout';
+  const s = row['총점'];
+  if(s>=70) return 'pass';
+  if(s>=55) return 'review';
+  return 'fail';
+}
+function statusLabel(st){
+  if(st==='pass') return '<span class="badge badge-pass">합격권</span>';
+  if(st==='review') return '<span class="badge badge-review">검토</span>';
+  if(st==='dropout') return '<span class="badge badge-dropout">학점탈락</span>';
+  return '<span class="badge badge-fail">탈락</span>';
+}
+function tierBadge(tier){
+  const cls = 'badge badge-'+tier.replace('.','\\.');
+  return `<span class="${cls}">${tier}</span>`;
+}
+
+// ── Filters ──
+function applyFilters(){
+  const name = document.getElementById('search-name').value.toLowerCase();
+  const job = document.getElementById('filter-job').value;
+  const tier = document.getElementById('filter-tier').value;
+  const status = document.getElementById('filter-status').value;
+  const minScore = parseInt(document.getElementById('filter-minscore').value)||0;
+
+  filteredData = RAW.filter(r=>{
+    if(name && !r['성명'].toLowerCase().includes(name)) return false;
+    if(job && r['희망직무']!==job) return false;
+    if(tier && r['대학등급']!==tier) return false;
+    if(minScore && r['총점']<minScore) return false;
+    if(status){
+      const st = getStatus(r);
+      if(st!==status) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  filteredData.sort((a,b)=>{
+    let av=a[sortKey], bv=b[sortKey];
+    if(typeof av==='string') av=av.toLowerCase();
+    if(typeof bv==='string') bv=bv.toLowerCase();
+    if(av<bv) return sortAsc?-1:1;
+    if(av>bv) return sortAsc?1:-1;
+    return 0;
+  });
+
+  currentPage=1;
+  renderTable();
+}
+
+function resetFilters(){
+  document.getElementById('search-name').value='';
+  document.getElementById('filter-job').value='';
+  document.getElementById('filter-tier').value='';
+  document.getElementById('filter-status').value='';
+  document.getElementById('filter-minscore').value='';
+  applyFilters();
+}
+
+function sortBy(key){
+  if(sortKey===key) sortAsc=!sortAsc; else {sortKey=key;sortAsc=false;}
+  applyFilters();
+}
+
+// ── Table ──
+function renderTable(){
+  const pageSize = parseInt(document.getElementById('page-size').value)||50;
+  const total = filteredData.length;
+
+  // 빈 상태 안내
+  if(!total && !RAW.length){
+    const tbody = document.getElementById('results-tbody');
+    if(tbody) tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:3rem 1rem;color:var(--text-muted)">
+      <div style="font-size:2rem;margin-bottom:.75rem">📂</div>
+      <div style="font-weight:600;margin-bottom:.5rem;color:var(--text)">데이터가 없습니다</div>
+      <div style="font-size:.85rem">엑셀 업로드 탭에서 지원자 파일을 업로드해주세요.</div>
+      <button onclick="document.querySelector('.tab[onclick*=upload]').click()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:.85rem">📤 업로드하러 가기</button>
+    </td></tr>`;
+    document.getElementById('result-count').textContent = '';
+    return;
+  }
+
+  const totalPages = Math.max(1,Math.ceil(total/pageSize));
+  currentPage = Math.min(currentPage, totalPages);
+
+  const start = (currentPage-1)*pageSize;
+  const slice = filteredData.slice(start, start+pageSize);
+
+  const maxScore = 122;
+  let html = '';
+  slice.forEach((row,i)=>{
+    const rank = start+i+1;
+    const globalRank = RAW.indexOf(row)+1;
+    const st = getStatus(row);
+    const pct = Math.round(row['총점']/maxScore*100);
+    let barCls = pct>=65?'high':pct>=45?'mid':st==='dropout'?'fail':'low';
+    const medal = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+    const eng = row['어학점수']>0 ? `${row['어학성적']} (${row['어학점수']}점)` : '-';
+    const cert1 = row['자격증1']!=='0'?row['자격증1']:'-';
+    const gpa = row['학점']!=='0'?parseFloat(row['학점']).toFixed(2):'-';
+
+    html += `<tr>
+      <td><span class="rank-badge ${medal}">${rank}</span></td>
+      <td style="font-weight:600">${row['성명']}</td>
+      <td>${row['희망직무']}</td>
+      <td>${tierBadge(row['대학등급'])} <span style="font-size:.78rem;color:var(--text-muted)">${row['출신대학']}</span></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${row['전공']}</td>
+      <td>${gpa}</td>
+      <td>${eng}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;font-size:.78rem">${cert1}</td>
+      <td>
+        <div class="score-bar">
+          <div class="score-bar-track"><div class="score-bar-fill ${barCls}" style="width:${pct}%"></div></div>
+          <span style="font-weight:700;min-width:28px">${row['총점']}</span>
+        </div>
+      </td>
+      <td>${statusLabel(st)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick='openDrawer(${JSON.stringify(row).replace(/'/g,"\'")} )'>상세</button></td>
+    </tr>`;
+  });
+
+  document.getElementById('result-tbody').innerHTML = html;
+  document.getElementById('result-count').textContent = `총 ${total.toLocaleString()}명`;
+  document.getElementById('page-info').textContent = `${start+1}~${Math.min(start+pageSize,total)} / ${total}명`;
+
+  // Pagination
+  let phtml = '';
+  phtml += `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹</button>`;
+  let startP = Math.max(1,currentPage-2), endP = Math.min(totalPages,startP+4);
+  if(endP-startP<4) startP=Math.max(1,endP-4);
+  for(let p=startP;p<=endP;p++){
+    phtml+=`<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+  }
+  phtml += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>›</button>`;
+  document.getElementById('page-btns').innerHTML = phtml;
+}
+
+function goPage(p){currentPage=p;renderTable();}
+function changePaging(){currentPage=1;renderTable();}
+
+// ── CSV Export ──
+function exportCSV(){
+  const cols = ['접수번호','성명','희망직무','출신대학','대학등급','대학점수','전공','전공구분','전공점수','학점','학점점수','어학시험','어학성적','어학점수','자격증1','자격증2','자격증점수','인턴','인턴점수','수상','수상점수','석사점수','총점','탈락여부'];
+  let csv = '\uFEFF'+cols.join(',')+'\n';
+  filteredData.forEach(r=>{
+    csv += cols.map(c=>{
+      let v=String(r[c]||'');
+      if(v.includes(',')) v=`"${v}"`;
+      return v;
+    }).join(',')+'\n';
+  });
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='서류채점결과_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+// ── Drawer ──
+function openDrawer(row){
+  const maxScore = 122;
+  const st = getStatus(row);
+  const pct = Math.round(row['총점']/maxScore*100);
+
+  let stColor = st==='pass'?'#437a22':st==='review'?'#92400e':st==='dropout'?'#964219':'#a12c7b';
+  let stTxt = st==='pass'?'합격권':st==='review'?'검토':st==='dropout'?'학점탈락':'탈락';
+
+  const items = [
+    {label:'출신대학', val:row['출신대학'], sub:`${row['대학등급']}`, pts:row['대학점수']},
+    {label:'전공', val:row['전공'], sub:row['전공구분'], pts:row['전공점수']},
+    {label:'학점', val:row['학점'], sub:'', pts:row['학점점수']},
+    {label:'어학', val:`${row['어학시험']} ${row['어학성적']}`, sub:'', pts:row['어학점수']},
+    {label:'자격증', val:`${row['자격증1']}${row['자격증2']!=='0'?' 외':''}`, sub:'', pts:row['자격증점수']},
+    {label:'인턴', val:row['인턴']!=='0'?row['인턴']:'없음', sub:'', pts:row['인턴점수']},
+    {label:'수상', val:row['수상']!=='0'?row['수상']:'없음', sub:'', pts:row['수상점수']},
+    {label:'석사 가산', val:row['석사']!=='0'?row['석사']:'해당없음', sub:'', pts:row['석사점수']},
+  ];
+
+  let html = `
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-name">${row['성명']}</div>
+        <div class="drawer-sub">${row['희망직무']} · 접수번호 ${row['접수번호']}</div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="total-score-box">
+      <div>
+        <div class="total-score-label">총점</div>
+        <div class="total-score-num">${row['총점']}<small style="font-size:1rem;opacity:.7"> / 122</small></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:1.25rem;font-weight:700;padding:.3rem .75rem;background:rgba(255,255,255,.2);border-radius:var(--radius-full)">${stTxt}</div>
+        <div style="font-size:.8rem;opacity:.7;margin-top:.3rem">${pct}%</div>
+      </div>
+    </div>
+    <div class="score-section">
+      <div class="score-section-title">항목별 점수</div>
+      ${items.map(it=>`
+        <div class="score-row">
+          <div>
+            <div class="score-row-label">${it.label}</div>
+            <div class="score-row-detail">${it.val}${it.sub?` · ${it.sub}`:''}</div>
+          </div>
+          <div class="score-row-value" style="color:${it.pts>0?'var(--primary)':'var(--text-faint)'}">${it.pts}점</div>
+        </div>`).join('')}
+    </div>`;
+
+  document.getElementById('drawer-content').innerHTML = html;
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+let currentJobFilter = 'all';
+
+function setJobFilter(job){
+  currentJobFilter = job;
+  ['all','mech','safe'].forEach(k=>{
+    const btn = document.getElementById('job-tab-'+k);
+    btn.className = btn.className.replace(' btn-primary','').replace('btn-ghost','btn-ghost');
+  });
+  const map = {all:'job-tab-all','기계/전기':'job-tab-mech','안전':'job-tab-safe'};
+  const activeId = map[job]||'job-tab-all';
+  document.getElementById(activeId).className = document.getElementById(activeId).className.replace('btn-ghost','btn-primary');
+  ['job-tab-all','job-tab-mech','job-tab-safe'].forEach(id=>{
+    if(id!==activeId){
+      const b=document.getElementById(id);
+      b.className=b.className.replace('btn-primary','btn-ghost');
+    }
+  });
+  renderDashboard();
+}
+
+function renderDashboard(){
+  const filter = currentJobFilter;
+  const DATA = filter==='all' ? RAW : RAW.filter(r=>r['희망직무']===filter);
+  const total = DATA.length;
+  if(!total){
+    document.getElementById('kpi-area').innerHTML = `
+      <div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;gap:1rem;text-align:center">
+        <div style="font-size:3rem">📂</div>
+        <div style="font-weight:700;font-size:1.1rem;color:var(--text)">아직 데이터가 없습니다</div>
+        <div style="color:var(--text-muted);font-size:.9rem;max-width:340px;line-height:1.6">엑셀 업로드 탭에서 지원자 파일을 업로드하면<br>대시보드가 자동으로 채워집니다.</div>
+        <button onclick="document.querySelector('.tab[onclick*=upload]').click()" style="margin-top:.5rem;padding:.6rem 1.4rem;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:.9rem">📤 엑셀 업로드하러 가기</button>
+      </div>`;
+    ['chart-dist','chart-uni','chart-eng','chart-major','chart-job-compare','chart-top10'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.innerHTML='';
+    });
+    return;
+  }
+
+  const pass = DATA.filter(r=>getStatus(r)==='pass').length;
+  const review = DATA.filter(r=>getStatus(r)==='review').length;
+  const dropout = DATA.filter(r=>getStatus(r)==='dropout').length;
+  const avg = Math.round(DATA.reduce((s,r)=>s+r['총점'],0)/total);
+  const maxS = Math.max(...DATA.map(r=>r['총점']));
+  const badge = filter==='all'?`전체 ${RAW.length.toLocaleString()}명`:`${filter} ${total.toLocaleString()}명`;
+  document.getElementById('job-filter-badge').textContent = badge;
+
+  document.getElementById('kpi-area').innerHTML = `
+    <div class="kpi"><div class="kpi-label">지원자</div><div class="kpi-value">${total.toLocaleString()}</div><div class="kpi-sub">명</div></div>
+    <div class="kpi"><div class="kpi-label">합격권 (70+)</div><div class="kpi-value" style="color:var(--success)">${pass.toLocaleString()}</div><div class="kpi-sub">${(pass/total*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="kpi-label">검토 (55~69)</div><div class="kpi-value" style="color:#92400e">${review.toLocaleString()}</div><div class="kpi-sub">${(review/total*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="kpi-label">학점 탈락</div><div class="kpi-value" style="color:var(--warning)">${dropout.toLocaleString()}</div><div class="kpi-sub">${(dropout/total*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="kpi-label">평균 점수</div><div class="kpi-value">${avg}</div><div class="kpi-sub">/ 122점</div></div>
+    <div class="kpi"><div class="kpi-label">최고 점수</div><div class="kpi-value">${maxS}</div><div class="kpi-sub">점</div></div>
+  `;
+
+  // Score distribution
+  const buckets = [[90,122,'90+'],[80,90,'80-89'],[70,80,'70-79'],[60,70,'60-69'],[50,60,'50-59'],[0,50,'~49']];
+  const maxBucket = Math.max(...buckets.map(([a,b])=>DATA.filter(r=>r['총점']>=a&&r['총점']<b).length));
+  document.getElementById('chart-dist').innerHTML = buckets.map(([a,b,lbl])=>{
+    const cnt=DATA.filter(r=>r['총점']>=a&&r['총점']<b).length;
+    const w=maxBucket?Math.round(cnt/maxBucket*100):0;
+    const col=a>=70?'var(--success)':a>=55?'#f59e0b':'var(--text-faint)';
+    return `<div class="dist-row">
+      <span class="dist-label">${lbl}점</span>
+      <div style="flex:1;height:18px;background:var(--divider);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:${col};border-radius:3px;transition:width .5s"></div>
+      </div>
+      <span style="width:50px;text-align:right;font-weight:600;font-size:.8rem">${cnt}명</span>
+    </div>`;
+  }).join('');
+
+  // Uni tier
+  const tiers=['1군','1.5군','2군','3군','4군','기타'];
+  const tierCounts=tiers.map(t=>({label:t,cnt:DATA.filter(r=>r['대학등급']===t).length}));
+  const maxUni=Math.max(...tierCounts.map(t=>t.cnt));
+  document.getElementById('chart-uni').innerHTML=tierCounts.map(({label,cnt})=>`
+    <div class="bar-row"><span class="bar-row-label">${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${maxUni?Math.round(cnt/maxUni*100):0}%"><span>${cnt}</span></div></div></div>`).join('');
+
+  // English
+  const engLevels=[
+    {label:'S (AL/955+)',cnt:DATA.filter(r=>r['어학점수']>=20).length},
+    {label:'A (IH/915+)',cnt:DATA.filter(r=>r['어학점수']===17).length},
+    {label:'B (IM3/815+)',cnt:DATA.filter(r=>r['어학점수']===14).length},
+    {label:'C (IM2/720+)',cnt:DATA.filter(r=>r['어학점수']===11).length},
+    {label:'D (IM1/550+)',cnt:DATA.filter(r=>r['어학점수']===8).length},
+    {label:'미제출/X',cnt:DATA.filter(r=>r['어학점수']===0).length},
+  ];
+  const maxEng=Math.max(...engLevels.map(e=>e.cnt));
+  document.getElementById('chart-eng').innerHTML=engLevels.map(({label,cnt})=>`
+    <div class="bar-row"><span class="bar-row-label">${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${maxEng?Math.round(cnt/maxEng*100):0}%"><span>${cnt}</span></div></div></div>`).join('');
+
+  // Major
+  const majors=[
+    {label:'동일전공 (15점)',cnt:DATA.filter(r=>r['전공구분']==='동일').length},
+    {label:'유관전공 (12점)',cnt:DATA.filter(r=>r['전공구분']==='유관').length},
+    {label:'무관전공 (7점)',cnt:DATA.filter(r=>r['전공구분']==='무관').length},
+  ];
+  const maxMaj=Math.max(...majors.map(m=>m.cnt));
+  document.getElementById('chart-major').innerHTML=majors.map(({label,cnt})=>`
+    <div class="bar-row"><span class="bar-row-label">${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${maxMaj?Math.round(cnt/maxMaj*100):0}%"><span>${cnt}</span></div></div></div>`).join('');
+
+  // ─── 직무별 비교 차트 ────────────────────────────────
+  const mechData = RAW.filter(r=>r['희망직무']==='기계/전기');
+  const safeData = RAW.filter(r=>r['희망직무']==='안전');
+  const buckets2=[[90,122,'90+'],[80,90,'80-89'],[70,80,'70-79'],[60,70,'60-69'],[50,60,'50-59'],[0,50,'~49']];
+  const maxJobCnt = Math.max(...buckets2.map(([a,b])=>Math.max(
+    mechData.filter(r=>r['총점']>=a&&r['총점']<b).length,
+    safeData.filter(r=>r['총점']>=a&&r['총점']<b).length
+  )));
+  document.getElementById('chart-job-compare').innerHTML = buckets2.map(([a,b,lbl])=>{
+    const mc=mechData.filter(r=>r['총점']>=a&&r['총점']<b).length;
+    const sc=safeData.filter(r=>r['총점']>=a&&r['총점']<b).length;
+    const mw=maxJobCnt?Math.round(mc/maxJobCnt*100):0;
+    const sw=maxJobCnt?Math.round(sc/maxJobCnt*100):0;
+    return `<div class="job-compare-row">
+      <span class="job-label">${lbl}점</span>
+      <div class="job-bar-group">
+        <div class="job-bar-track"><div class="job-bar-fill-mech" style="width:${mw}%"></div></div>
+        <div class="job-bar-count" style="color:var(--primary)">${mc}명</div>
+      </div>
+      <div class="job-bar-group">
+        <div class="job-bar-track"><div class="job-bar-fill-safe" style="width:${sw}%"></div></div>
+        <div class="job-bar-count" style="color:var(--success)">${sc}명</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ─── Top 10 합격권 ────────────────────────────────
+  const top10 = [...DATA].filter(r=>getStatus(r)==='pass').sort((a,b)=>b['총점']-a['총점']).slice(0,10);
+  const allSorted = [...DATA].sort((a,b)=>b['총점']-a['총점']);
+  document.getElementById('chart-top10').innerHTML = top10.map((row,i)=>{
+    const rank=i+1;
+    const medal=rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+    const pct=Math.round(row['총점']/122*100);
+    const jobColor=row['희망직무']==='안전'?'var(--success)':'var(--primary)';
+    return `<tr>
+      <td><span class="mini-rank ${medal}">${rank}</span></td>
+      <td style="font-weight:700">${row['성명']}</td>
+      <td style="font-size:.75rem;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis">${row['출신대학'].replace('학교','').replace(' - ','/')}</td>
+      <td><span style="font-size:.72rem;font-weight:700;color:${jobColor}">${row['희망직무']}</span></td>
+      <td>
+        <div class="mini-score-bar">
+          <div class="mini-score-track"><div class="mini-score-fill" style="width:${pct}%"></div></div>
+          <span style="font-weight:700;font-size:.82rem">${row['총점']}</span>
+        </div>
+      </td>
+      <td>${statusLabel(getStatus(row))}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1rem">합격권 지원자가 없습니다</td></tr>';
+}
+
+// Init
+applyFilters();
+renderDashboard();
+</script>
+
+<script>
+// ══════════════════════════════════════
+// UPLOAD TAB LOGIC
+// ══════════════════════════════════════
+let uploadedColumns = [];
+let uploadedRows = [];
+let uploadScoredData = [];
+let uploadFilteredData = [];
+let uploadPage = 1;
+
+const FIELD_MAP = {
+  '성명': ['성명(한글)','성명','이름','name'],
+  '희망직무1': ['희망직무1','희망직무','직무','job'],
+  '접수번호': ['접수번호','지원번호','번호'],
+  '학사1학교명': ['학사1학교명','출신대학','학교명','대학교','학교'],
+  '학사1전공': ['학사1전공','전공','전공명','major'],
+  '학사1평균학점': ['학사1평균학점','학점','평균학점','GPA','gpa'],
+  '학사1만점학점': ['학사1만점학점','만점학점','만점','최대학점'],
+  '영어1시험명': ['영어1시험명','어학시험','시험명','영어시험'],
+  '영어1시험성적': ['영어1시험성적','어학성적','시험성적','영어성적'],
+  '자격면허1': ['자격면허1','자격증1','자격증','자격'],
+  '자격면허2': ['자격면허2','자격증2'],
+  '자격면허3': ['자격면허3','자격증3'],
+  '자격면허4': ['자격면허4','자격증4'],
+  '인턴1직장명': ['인턴1직장명','인턴직장명','인턴명','인턴1','인턴'],
+  '인턴1근무기간': ['인턴1근무기간','인턴근무기간','인턴기간'],
+  '수상명1': ['수상명1','수상명','수상','award'],
+  '수여기관1': ['수여기관1','수여기관','시상기관','기관'],
+  '석사1학교명': ['석사1학교명','석사학교','석사','대학원'],
+};
+
+const FIELD_LABELS = {
+  '성명': '성명 *',
+  '희망직무1': '희망직무',
+  '접수번호': '접수번호',
+  '학사1학교명': '출신 대학 *',
+  '학사1전공': '전공 *',
+  '학사1평균학점': '평균 학점 *',
+  '학사1만점학점': '만점 학점',
+  '영어1시험명': '어학 시험명',
+  '영어1시험성적': '어학 성적',
+  '자격면허1': '자격증 1',
+  '자격면허2': '자격증 2',
+  '자격면허3': '자격증 3',
+  '자격면허4': '자격증 4',
+  '인턴1직장명': '인턴 직장명',
+  '인턴1근무기간': '인턴 근무기간',
+  '수상명1': '수상명',
+  '수여기관1': '수여기관',
+  '석사1학교명': '석사 학교',
+};
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if(file) handleFileUpload(file);
+}
+
+function handleFileUpload(file){
+  if(!file) return;
+  if(!file.name.match(/\.xlsx?$/i)){
+    alert('xlsx 또는 xls 파일만 업로드 가능합니다.'); return;
+  }
+  const prog = document.getElementById('upload-progress');
+  prog.style.display = 'block';
+  setProgress(10, `📂 파일 읽는 중: ${file.name}`);
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      setProgress(30, '📊 엑셀 파싱 중...');
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+
+      // Use first sheet
+      const wsName = wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const json = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      if(!json.length){ alert('데이터가 없습니다.'); return; }
+
+      uploadedColumns = Object.keys(json[0]);
+      uploadedRows = json;
+
+      setProgress(60, `✅ ${json.length}행 읽기 완료. 컬럼 매핑 중...`);
+
+      // Auto-detect columns
+      buildColumnMapping();
+      setProgress(100, `🎉 완료! 컬럼 매핑을 확인 후 [채점 시작]을 클릭하세요.`);
+
+      addLog(`<span class="ok">✅ ${json.length}명 데이터 로드 완료 (시트: ${wsName})</span>`);
+      addLog(`<span>📋 인식된 컬럼: ${uploadedColumns.slice(0,8).join(', ')}${uploadedColumns.length>8?' ...':''}</span>`);
+
+      document.getElementById('col-map-section').style.display = 'block';
+
+    }catch(err){
+      addLog(`<span class="warn">❌ 오류: ${err.message}</span>`);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setProgress(pct, msg){
+  document.getElementById('progress-bar').style.width = pct+'%';
+  document.getElementById('progress-title').textContent = msg;
+}
+function addLog(html){ 
+  const el = document.getElementById('upload-log');
+  el.innerHTML += html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function buildColumnMapping(){
+  const tbody = document.getElementById('col-map-body');
+  const cols = ['(없음)', ...uploadedColumns];
+
+  tbody.innerHTML = Object.keys(FIELD_MAP).map(fieldKey => {
+    const label = FIELD_LABELS[fieldKey];
+    const aliases = FIELD_MAP[fieldKey];
+    // Auto-detect best match
+    let matched = '';
+    for(const alias of aliases){
+      const found = uploadedColumns.find(c => c.replace(/\s/g,'').toLowerCase() === alias.replace(/\s/g,'').toLowerCase());
+      if(found){ matched = found; break; }
+    }
+    const opts = cols.map(c => `<option value="${c}" ${c===matched?'selected':''}>${c}</option>`).join('');
+    const isRequired = label.includes('*');
+    return `<tr>
+      <td><span style="font-weight:${isRequired?'700':'400'};color:${isRequired?'var(--text)':'var(--text-muted)'}">${label}</span></td>
+      <td><select id="map-${fieldKey}" style="width:100%;max-width:260px">${opts}</select></td>
+      <td style="font-size:.75rem;color:var(--text-faint)">${aliases.slice(0,3).join(', ')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function getVal(row, fieldKey){
+  const sel = document.getElementById('map-'+fieldKey);
+  if(!sel) return '';
+  const col = sel.value;
+  if(!col || col==='(없음)') return '';
+  return String(row[col] || '').trim();
+}
+
+function runScoringFromUpload(){
+  if(!uploadedRows.length){ alert('먼저 파일을 업로드하세요.'); return; }
+  setProgress(0, '채점 시작...');
+  document.getElementById('upload-progress').style.display = 'block';
+
+  const results = [];
+  const total = uploadedRows.length;
+
+  uploadedRows.forEach((row, i) => {
+    const r = {};
+    Object.keys(FIELD_MAP).forEach(k => { r[k] = getVal(row, k) || '0'; });
+
+    // Score each field using same logic as main data
+    const uniName = r['학사1학교명'];
+    const [tierName, uniSc] = getUniTier(uniName);
+    const [majorName, majorSc] = getMajorScore(r['학사1전공']);
+    const gpaSc = getGpaScore(tierName, r['학사1평균학점'], r['학사1만점학점']);
+    const engSc = getEnglishScore(r['영어1시험명'], r['영어1시험성적']);
+
+    const certs = [r['자격면허1'],r['자격면허2'],r['자격면허3'],r['자격면허4']];
+    const certSc = getTotalCertScore(certs);
+
+    const internSc = getInternScore(r['인턴1직장명']);
+    const awardSc = getAwardScore(r['수상명1'], r['수여기관1']);
+    const masterSc = r['석사1학교명']!=='0' && r['석사1학교명']!=='' ? 5 : 0;
+
+    const total_score = uniSc + majorSc + gpaSc + engSc + certSc + internSc + awardSc + masterSc;
+    const dropout = (tierName==='4군'||tierName==='기타') && gpaSc===0;
+
+    results.push({
+      '순번': i+1,
+      '접수번호': r['접수번호'],
+      '성명': r['성명'],
+      '희망직무': r['희망직무1'],
+      '출신대학': uniName,
+      '대학등급': tierName,
+      '대학점수': uniSc,
+      '전공': r['학사1전공'],
+      '전공구분': majorName,
+      '전공점수': majorSc,
+      '학점': r['학사1평균학점'],
+      '학점점수': gpaSc,
+      '어학시험': r['영어1시험명'],
+      '어학성적': r['영어1시험성적'],
+      '어학점수': engSc,
+      '자격증1': r['자격면허1'],
+      '자격증2': r['자격면허2'],
+      '자격증점수': certSc,
+      '인턴': r['인턴1직장명'],
+      '인턴점수': internSc,
+      '수상': r['수상명1'],
+      '수상점수': awardSc,
+      '석사점수': masterSc,
+      '총점': total_score,
+      '탈락여부': dropout ? '탈락' : ''
+    });
+  });
+
+  results.sort((a,b) => b['총점'] - a['총점']);
+  uploadScoredData = results;
+  uploadFilteredData = [...results];
+
+  // ── 대시보드·채점결과 탭에 자동 연동 ──
+  RAW.length = 0;
+  results.forEach(r => RAW.push(r));
+  filteredData = [...RAW];
+  applyFilters();
+  renderDashboard();
+
+  setProgress(100, `✅ ${results.length}명 채점 완료! 대시보드·채점결과 탭에 자동 반영됐어요.`);
+  addLog(`<span class="ok">🏆 채점 완료! 최고점: ${Math.max(...results.map(r=>r['총점']))}점 / 평균: ${Math.round(results.reduce((s,r)=>s+r['총점'],0)/results.length)}점</span>`);
+  addLog(`<span class="ok">📊 대시보드 & 채점결과 탭이 새 데이터로 자동 업데이트됐습니다.</span>`);
+
+  // 연동 알림 배너 표시
+  const syncBanner = document.getElementById('upload-sync-banner');
+  if(syncBanner){
+    syncBanner.style.display = 'flex';
+    syncBanner.querySelector('.sync-count').textContent = results.length.toLocaleString() + '명';
+  }
+
+  document.getElementById('upload-result-section').style.display = 'block';
+  uploadPage = 1;
+  renderUploadTable();
+  document.getElementById('upload-result-section').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── Criteria customization ──
+const DEFAULT_CRITERIA = {
+  uni_1:40, uni_15:36, uni_2:32, uni_3:24, uni_4:16, uni_etc:8,
+  major_same:15, major_related:12, major_other:7,
+  gpa_t1_thresh:3.6, gpa_t1_s1:15, gpa_t1_s2:13, gpa_t1_s3:9,
+  gpa_t2_thresh:4.0, gpa_t2_s1:15, gpa_t2_s2:13, gpa_t2_s3:9,
+  gpa_t3_thresh:4.3, gpa_t3_s1:15, gpa_t3_s2:13, gpa_t3_s3:9,
+  gpa_t4_thresh:4.3, gpa_t4_s1:9,
+  eng_s:20, eng_a:17, eng_b:14, eng_c:11, eng_d:8,
+  eng_toeic_s:955, eng_toeic_a:915, eng_toeic_b:815, eng_toeic_c:720, eng_toeic_d:550,
+  cert_a:10, cert_b:8, cert_c:6,
+  intern_big:10, intern_etc:5,
+  award_nat:7, award_school:3,
+  master_bonus:5
+};
+
+let CRITERIA = {...DEFAULT_CRITERIA};
+let pendingRecalcData = null;
+
+function getCriteria(){
+  const c = {};
+  Object.keys(DEFAULT_CRITERIA).forEach(k => {
+    const el = document.querySelector(`[data-key="${k}"]`);
+    c[k] = el ? (parseFloat(el.value)||0) : DEFAULT_CRITERIA[k];
+  });
+  return c;
+}
+
+function onCriteriaChange(){
+  CRITERIA = getCriteria();
+  const badge = document.getElementById('criteria-changed-badge');
+  if(badge) badge.style.display = 'inline-block';
+}
+
+function resetCriteria(){
+  if(!confirm('배점 기준을 기본값으로 되돌릴까요?')) return;
+  Object.keys(DEFAULT_CRITERIA).forEach(k => {
+    const el = document.querySelector(`[data-key="${k}"]`);
+    if(el) el.value = DEFAULT_CRITERIA[k];
+  });
+  CRITERIA = {...DEFAULT_CRITERIA};
+  const badge = document.getElementById('criteria-changed-badge');
+  if(badge) badge.style.display = 'none';
+  document.getElementById('recalc-preview').style.display = 'none';
+  alert('기본값으로 복원되었습니다.');
+}
+
+function recalculateAll(){
+  const allData = RAW.length ? RAW : (uploadScoredData.length ? uploadScoredData : null);
+  if(!allData || !allData.length){ alert('채점된 데이터가 없습니다. 먼저 엑셀을 업로드하거나 지원자를 입력해주세요.'); return; }
+  CRITERIA = getCriteria();
+
+  const preview = [];
+  allData.forEach(row => {
+    const uniName = row['출신대학'];
+    const [tierName, uniSc] = getUniTier(uniName);
+    const [majorName, majorSc] = getMajorScore(row['전공']);
+    const gpaSc = getGpaScoreCustom(tierName, row['학점'], null);
+    const engSc = getEnglishScoreCustom(row['어학시험'], row['어학성적']);
+    const certSc = getCertScoreCustom(row['자격증점수_원본'] || row['자격증점수']);
+    const internSc = getInternScoreCustom(row['인턴'] || '0');
+    const awardSc = getAwardScoreCustom(row['수상'] || '0', '');
+    const masterSc = (row['석사점수'] > 0) ? CRITERIA.master_bonus : 0;
+
+    const newTotal = uniSc + majorSc + gpaSc + engSc + certSc + internSc + awardSc + masterSc;
+    preview.push({ row, oldTotal: row['총점'], newTotal, uniSc, majorSc, gpaSc, engSc, certSc, internSc, awardSc, masterSc });
+  });
+
+  pendingRecalcData = preview;
+  renderRecalcPreview(preview);
+}
+
+function getUniScoreCustom(tier){
+  const map = {'1군':CRITERIA.uni_1,'1.5군':CRITERIA.uni_15,'2군':CRITERIA.uni_2,'3군':CRITERIA.uni_3,'4군':CRITERIA.uni_4,'기타':CRITERIA.uni_etc};
+  return map[tier]||CRITERIA.uni_etc;
+}
+
+function getMajorScoreCustom(majorName){
+  if(majorName==='동일') return CRITERIA.major_same;
+  if(majorName==='유관') return CRITERIA.major_related;
+  return CRITERIA.major_other;
+}
+
+function getGpaScoreCustom(tier, gpaStr, maxStr){
+  const gpa = parseFloat(gpaStr);
+  if(isNaN(gpa)) return CRITERIA.gpa_t1_s3;
+  const maxGpa = parseFloat(maxStr)||4.5;
+  const norm = maxGpa!==4.5 ? gpa/maxGpa*4.5 : gpa;
+  if(tier==='1군'){
+    const t=CRITERIA.gpa_t1_thresh; if(norm>=t) return CRITERIA.gpa_t1_s1; if(norm>=t-0.3) return CRITERIA.gpa_t1_s2; return CRITERIA.gpa_t1_s3;
+  } else if(tier==='1.5군'||tier==='2군'){
+    const t=CRITERIA.gpa_t2_thresh; if(norm>=t) return CRITERIA.gpa_t2_s1; if(norm>=t-0.5) return CRITERIA.gpa_t2_s2; return CRITERIA.gpa_t2_s3;
+  } else if(tier==='3군'){
+    const t=CRITERIA.gpa_t3_thresh; if(norm>=t) return CRITERIA.gpa_t3_s1; if(norm>=t-0.3) return CRITERIA.gpa_t3_s2; return CRITERIA.gpa_t3_s3;
+  } else {
+    const t=CRITERIA.gpa_t4_thresh; if(norm>=t) return CRITERIA.gpa_t4_s1; return 0;
+  }
+}
+
+function getEnglishScoreCustom(testName, score){
+  if(!testName||testName==='0') return 0;
+  const s = String(score).trim();
+  if(testName.includes('OPIc')){
+    const map={AL:CRITERIA.eng_s,AM:CRITERIA.eng_s,AH:CRITERIA.eng_s,IH:CRITERIA.eng_a,IM3:CRITERIA.eng_b,IM2:CRITERIA.eng_c,IM1:CRITERIA.eng_d,IL:0};
+    return map[s]||0;
+  } else if(testName.includes('TOEIC Speaking')){
+    const v=parseInt(s);
+    if(!isNaN(v)){
+      if(v>=CRITERIA.eng_toeic_s) return CRITERIA.eng_s;
+      if(v>=CRITERIA.eng_toeic_a) return CRITERIA.eng_a;
+      if(v>=CRITERIA.eng_toeic_b) return CRITERIA.eng_b;
+      if(v>=CRITERIA.eng_toeic_c) return CRITERIA.eng_c;
+      if(v>=CRITERIA.eng_toeic_d) return CRITERIA.eng_d;
+      return 0;
+    }
+    if(s.includes('Advanced High')||s.includes('Advanced Mid')) return CRITERIA.eng_s;
+    if(s.includes('Advanced Low')) return CRITERIA.eng_a;
+    if(s.includes('Intermediate High')) return CRITERIA.eng_b;
+    if(s.includes('Intermediate Mid3')||s.includes('Intermediate Mid2')) return CRITERIA.eng_c;
+    if(s.includes('Intermediate Mid1')) return CRITERIA.eng_d;
+    return 0;
+  } else if(testName==='TOEIC'){
+    const sc=parseInt(s);
+    if(sc>=CRITERIA.eng_toeic_s) return CRITERIA.eng_s;
+    if(sc>=CRITERIA.eng_toeic_a) return CRITERIA.eng_a;
+    if(sc>=CRITERIA.eng_toeic_b) return CRITERIA.eng_b;
+    if(sc>=CRITERIA.eng_toeic_c) return CRITERIA.eng_c;
+    if(sc>=CRITERIA.eng_toeic_d) return CRITERIA.eng_d;
+    return 0;
+  }
+  return 0;
+}
+
+function getCertScoreCustom(originalScore){
+  // Map original score to new criteria proportionally
+  if(originalScore>=10) return CRITERIA.cert_a;
+  if(originalScore>=8) return CRITERIA.cert_b;
+  if(originalScore>=6) return CRITERIA.cert_c;
+  return 0;
+}
+
+function getInternScoreCustom(name){
+  if(!name||name==='0') return 0;
+  const big=['한화','삼성','SK','LG','현대','롯데','GS','포스코','HD','LS','KT'];
+  for(const k of big) if(name.includes(k)) return CRITERIA.intern_big;
+  return CRITERIA.intern_etc;
+}
+
+function getAwardScoreCustom(name, org){
+  if(!name||name==='0') return 0;
+  return CRITERIA.award_nat;
+}
+
+function renderRecalcPreview(preview){
+  const tbody = document.getElementById('recalc-tbody');
+  const sorted = [...preview].sort((a,b)=>b.newTotal-a.newTotal);
+  let html='';
+  sorted.slice(0,50).forEach((item,i)=>{
+    const diff = item.newTotal - item.oldTotal;
+    const diffHtml = diff>0?`<span class="diff-up">▲${diff}</span>`:diff<0?`<span class="diff-down">▼${Math.abs(diff)}</span>`:`<span class="diff-same">—</span>`;
+    const st = item.newTotal>=70?'<span style="color:var(--success);font-weight:700">합격권</span>':item.newTotal>=55?'<span style="color:#92400e;font-weight:700">검토</span>':'<span style="color:var(--text-muted)">탈락</span>';
+    html+=`<tr>
+      <td style="font-weight:700">${i+1}</td>
+      <td style="font-weight:700">${item.row['성명']}</td>
+      <td style="font-size:.75rem;color:var(--text-muted)">${(item.row['출신대학']||'').replace('학교','')}</td>
+      <td style="color:var(--text-muted)">${item.oldTotal}</td>
+      <td style="font-weight:700">${item.newTotal}</td>
+      <td>${diffHtml}</td>
+      <td>${st}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  const count = document.getElementById('recalc-count');
+  if(count) count.textContent = `총 ${preview.length}명 (상위 50명 미리보기)`;
+  document.getElementById('recalc-preview').style.display='block';
+  document.getElementById('recalc-preview').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function applyRecalc(){
+  if(!pendingRecalcData) return;
+  pendingRecalcData.forEach(item=>{
+    item.row['총점'] = item.newTotal;
+    item.row['대학점수'] = item.uniSc;
+    item.row['전공점수'] = item.majorSc;
+    item.row['학점점수'] = item.gpaSc;
+    item.row['어학점수'] = item.engSc;
+    item.row['자격증점수'] = item.certSc;
+    item.row['인턴점수'] = item.internSc;
+    item.row['수상점수'] = item.awardSc;
+    item.row['석사점수'] = item.masterSc;
+  });
+  RAW.sort((a,b)=>b['총점']-a['총점']);
+  applyFilters();
+  renderDashboard();
+  document.getElementById('recalc-preview').style.display='none';
+  document.getElementById('criteria-changed-badge').style.display='none';
+  pendingRecalcData=null;
+  // Switch to results tab
+  document.querySelector('.tab[data-page="results"]')?.click();
+  alert('✅ 재채점 결과가 채점결과 탭에 반영되었습니다!');
+}
+
+// ── Scoring functions (same logic as main) ──
+function getUniTier(name){
+  if(!name||name==='0') return ['기타',8];
+  const t1=['KAIST','서울대','포항공과대학교','포항공대'];
+  const t15=['고려대학교','연세대학교','서강대학교','성균관대학교','한양대학교'];
+  const t2=['경희대학교','중앙대학교','이화여자대학교','서울시립대학교','한국외국어대학교','UNIST','GIST','DGIST'];
+  const t3=['한양대학교 - ERICA','동국대학교','건국대학교','홍익대학교','인하대학교','아주대학교','국민대학교',
+            '전북대학교','전남대학교','충북대학교','충남대학교','경북대학교','부산대학교'];
+  const t4=['광운대학교','숭실대학교','숙명여자대학교','단국대학교','울산대학교','한국항공대학교',
+            '서울과학기술대학교','제주대학교','인천대학교','경상국립대학교','순천대학교','군산대학교','한경국립대학교','한밭대학교','강릉원주대학교'];
+  for(const t of t1) if(name.includes(t)) return ['1군',40];
+  for(const t of t15) if(name.includes(t)) return ['1.5군',36];
+  for(const t of t2) if(name.includes(t)) return ['2군',32];
+  for(const t of t3) if(name.includes(t)) return ['3군',24];
+  for(const t of t4) if(name.includes(t)) return ['4군',16];
+  return ['기타',8];
+}
+
+function getMajorScore(major){
+  if(!major||major==='0') return ['무관',7];
+  const same=['기계','전기','전자','화공','냉동','공조','에너지','산업경영','재료','신소재','설비','소방','원자력','토목','건설환경','플랜트','조선','항공우주'];
+  const related=['컴퓨터','소프트웨어','IT','정보','통계','수학','물리','환경','생명','바이오','경영','경제','회계','산업공학','재무','자동차'];
+  for(const k of same) if(major.includes(k)) return ['동일',15];
+  for(const k of related) if(major.includes(k)) return ['유관',12];
+  return ['무관',7];
+}
+
+function getGpaScore(tier, gpaStr, maxStr){
+  const gpa = parseFloat(gpaStr); 
+  if(isNaN(gpa)) return 9;
+  const maxGpa = parseFloat(maxStr)||4.5;
+  const norm = maxGpa!==4.5 ? gpa/maxGpa*4.5 : gpa;
+  if(tier==='1군'){
+    if(norm>=3.6) return 15; if(norm>=3.3) return 13; if(norm>=3.0) return 11; return 9;
+  } else if(tier==='1.5군'||tier==='2군'){
+    if(norm>=4.0) return 15; if(norm>=3.5) return 13; if(norm>=3.0) return 11; return 9;
+  } else if(tier==='3군'){
+    if(norm>=4.3) return 15; if(norm>=4.0) return 13; if(norm>=3.5) return 11; return 9;
+  } else {
+    if(norm>=4.3) return 9; return 0;
+  }
+}
+
+function getEnglishScore(testName, score){
+  if(!testName||testName==='0') return 0;
+  const s = String(score).trim();
+  if(testName.includes('OPIc')){
+    return {AL:20,AM:20,AH:20,IH:17,IM3:14,IM2:11,IM1:8,IL:0}[s]||0;
+  } else if(testName.includes('TOEIC Speaking(22')){
+    const m={'Advanced High':20,'Advanced Mid':20,'Advanced Low':17,'Intermediate High':14,'Intermediate Mid3':11,'Intermediate Mid2':11,'Intermediate Mid1':8,'Intermediate Low':0};
+    return m[s]||0;
+  } else if(testName.includes('TOEIC Speaking')){
+    if(s.includes('8등급')) return 20; if(s.includes('7등급')) return 17;
+    if(s.includes('6등급')) return 14; if(s.includes('5등급')) return 11;
+    if(s.includes('4등급')) return 8; return 0;
+  } else if(testName==='TOEIC'){
+    const sc=parseInt(s);
+    if(sc>=955) return 20; if(sc>=915) return 17; if(sc>=815) return 14;
+    if(sc>=720) return 11; if(sc>=550) return 8; return 0;
+  }
+  return 0;
+}
+
+function getTotalCertScore(certs){
+  const certS=['기술사','공인노무사','공인회계사','변호사','명장'];
+  const certA=['공조냉동기계기사','일반기계기사','전기공사기사','신재생에너지발전설비기사','건설기계설비기사','토목기사','대기환경기사','소음진동기사','품질경영기사','폐기물처리기사','법무사','가스기사','에너지관리기사','전기기사','화공기사','기능장','수질환경기사','산업안전기사','소방설비기사','관세사','세무사','PE'];
+  const certB=['공조냉동기계산업기사','전기공사산업기사','신재생에너지발전설비산업기사','건설기계설비산업기사','토목산업기사','대기환경산업기사','소음진동산업기사','품질경영산업기사','폐기물처리산업기사','가스산업기사','에너지관리산업기사','전기산업기사','화공산업기사','위험물산업기사','전자산업기사','수질환경산업기사','산업안전산업기사','소방설비산업기사','보세사'];
+  const certC=['공조냉동기계기능사','기계가공조립기능사','전기기능사','신재생에너지발전설비기능사','전산응용기계제도기능사','전자기기기능사','가스기능사','에너지관리기능사','위험물기능사'];
+  let best = 0;
+  for(const c of certs){
+    if(!c||c==='0') continue;
+    for(const k of certS) if(c.includes(k)){ best=Math.max(best,10); break; }
+    for(const k of certA) if(c.includes(k)){ best=Math.max(best,10); break; }
+    for(const k of certB) if(c.includes(k)){ best=Math.max(best,8); break; }
+    for(const k of certC) if(c.includes(k)){ best=Math.max(best,6); break; }
+  }
+  return Math.min(best,10);
+}
+
+function getInternScore(name){
+  if(!name||name==='0') return 0;
+  const big=['한화','삼성','SK','LG','현대','롯데','GS','포스코','HD','LS','KT'];
+  for(const k of big) if(name.includes(k)) return 10;
+  return 5;
+}
+
+function getAwardScore(name, org){
+  if(!name||name==='0') return 0;
+  const natl=['국가','정부','산업부','과학기술','교육부','국토부','환경부','에너지','공단','협회','학회'];
+  for(const k of natl) if((org||'').includes(k)) return 7;
+  return 3;
+}
+
+// ── Upload Table Rendering ──
+function applyUploadFilters(){
+  const name = (document.getElementById('u-search-name').value||'').toLowerCase();
+  const status = document.getElementById('u-filter-status').value;
+  const minScore = parseInt(document.getElementById('u-filter-minscore').value)||0;
+
+  uploadFilteredData = uploadScoredData.filter(r=>{
+    if(name && !r['성명'].toLowerCase().includes(name)) return false;
+    if(minScore && r['총점']<minScore) return false;
+    if(status){
+      const st = getUploadStatus(r);
+      if(st!==status) return false;
+    }
+    return true;
+  });
+  uploadPage=1;
+  renderUploadTable();
+}
+
+function resetUploadFilters(){
+  document.getElementById('u-search-name').value='';
+  document.getElementById('u-filter-status').value='';
+  document.getElementById('u-filter-minscore').value='';
+  uploadFilteredData=[...uploadScoredData];
+  uploadPage=1;
+  renderUploadTable();
+}
+
+function getUploadStatus(r){
+  if(r['탈락여부']==='탈락') return 'dropout';
+  if(r['총점']>=70) return 'pass';
+  if(r['총점']>=55) return 'review';
+  return 'fail';
+}
+
+function renderUploadTable(){
+  const pageSize = parseInt(document.getElementById('u-page-size').value)||50;
+  const total = uploadFilteredData.length;
+  const totalPages = Math.max(1,Math.ceil(total/pageSize));
+  uploadPage = Math.min(uploadPage, totalPages);
+  const start = (uploadPage-1)*pageSize;
+  const slice = uploadFilteredData.slice(start, start+pageSize);
+
+  let html='';
+  slice.forEach((row,i)=>{
+    const rank=start+i+1;
+    const st=getUploadStatus(row);
+    const pct=Math.round(row['총점']/122*100);
+    const barCls=pct>=65?'high':pct>=45?'mid':st==='dropout'?'fail':'low';
+    const medal=rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+    const gpa=row['학점']&&row['학점']!=='0'?parseFloat(row['학점']).toFixed(2):'-';
+    const eng=row['어학점수']>0?`${row['어학성적']} (${row['어학점수']}점)`:'-';
+    const cert=row['자격증1']&&row['자격증1']!=='0'?row['자격증1']:'-';
+    html+=`<tr>
+      <td><span class="rank-badge ${medal}">${rank}</span></td>
+      <td style="font-weight:600">${row['성명']||'-'}</td>
+      <td><span class="badge badge-${row['대학등급']}">${row['대학등급']}</span> <span style="font-size:.78rem;color:var(--text-muted)">${row['출신대학']}</span></td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${row['전공']}</td>
+      <td>${gpa}</td>
+      <td>${eng}</td>
+      <td style="font-size:.78rem;max-width:140px;overflow:hidden;text-overflow:ellipsis">${cert}</td>
+      <td>${row['인턴점수']>0?row['인턴']+'('+row['인턴점수']+'점)':'-'}</td>
+      <td>${row['수상점수']>0?row['수상']+'('+row['수상점수']+'점)':'-'}</td>
+      <td><div class="score-bar"><div class="score-bar-track"><div class="score-bar-fill ${barCls}" style="width:${pct}%"></div></div><span style="font-weight:700;min-width:28px">${row['총점']}</span></div></td>
+      <td>${statusLabel(st)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick='openUploadDrawer(${JSON.stringify(row)})'>상세</button></td>
+    </tr>`;
+  });
+  document.getElementById('upload-result-tbody').innerHTML=html;
+  document.getElementById('upload-result-count').textContent=`총 ${total.toLocaleString()}명`;
+  document.getElementById('u-page-info').textContent=`${start+1}~${Math.min(start+pageSize,total)} / ${total}명`;
+
+  let phtml=`<button class="page-btn" onclick="goUploadPage(${uploadPage-1})" ${uploadPage<=1?'disabled':''}>‹</button>`;
+  let sp=Math.max(1,uploadPage-2),ep=Math.min(totalPages,sp+4);
+  if(ep-sp<4) sp=Math.max(1,ep-4);
+  for(let p=sp;p<=ep;p++) phtml+=`<button class="page-btn ${p===uploadPage?'active':''}" onclick="goUploadPage(${p})">${p}</button>`;
+  phtml+=`<button class="page-btn" onclick="goUploadPage(${uploadPage+1})" ${uploadPage>=totalPages?'disabled':''}>›</button>`;
+  document.getElementById('u-page-btns').innerHTML=phtml;
+}
+
+function goUploadPage(p){uploadPage=p;renderUploadTable();}
+function changeUploadPaging(){uploadPage=1;renderUploadTable();}
+
+function openUploadDrawer(row){
+  const st=getUploadStatus(row);
+  const pct=Math.round(row['총점']/122*100);
+  const stTxt=st==='pass'?'합격권':st==='review'?'검토':st==='dropout'?'학점탈락':'탈락';
+  const items=[
+    {label:'출신대학',val:row['출신대학'],sub:row['대학등급'],pts:row['대학점수']},
+    {label:'전공',val:row['전공'],sub:row['전공구분'],pts:row['전공점수']},
+    {label:'학점',val:row['학점'],sub:'',pts:row['학점점수']},
+    {label:'어학',val:`${row['어학시험']} ${row['어학성적']}`,sub:'',pts:row['어학점수']},
+    {label:'자격증',val:row['자격증1']&&row['자격증1']!=='0'?row['자격증1']:'없음',sub:'',pts:row['자격증점수']},
+    {label:'인턴',val:row['인턴']&&row['인턴']!=='0'?row['인턴']:'없음',sub:'',pts:row['인턴점수']},
+    {label:'수상',val:row['수상']&&row['수상']!=='0'?row['수상']:'없음',sub:'',pts:row['수상점수']},
+    {label:'석사 가산',val:row['석사점수']>0?'있음':'없음',sub:'',pts:row['석사점수']},
+  ];
+  document.getElementById('drawer-content').innerHTML=`
+    <div class="drawer-header">
+      <div><div class="drawer-name">${row['성명']||'-'}</div>
+      <div class="drawer-sub">${row['희망직무']||''} · ${row['접수번호']||''}</div></div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="total-score-box">
+      <div><div class="total-score-label">총점</div>
+      <div class="total-score-num">${row['총점']}<small style="font-size:1rem;opacity:.7"> / 122</small></div></div>
+      <div style="text-align:right">
+        <div style="font-size:1.25rem;font-weight:700;padding:.3rem .75rem;background:rgba(255,255,255,.2);border-radius:var(--radius-full)">${stTxt}</div>
+        <div style="font-size:.8rem;opacity:.7;margin-top:.3rem">${pct}%</div>
+      </div>
+    </div>
+    <div class="score-section">
+      <div class="score-section-title">항목별 점수</div>
+      ${items.map(it=>`<div class="score-row"><div><div class="score-row-label">${it.label}</div><div class="score-row-detail">${it.val}${it.sub?' · '+it.sub:''}</div></div><div class="score-row-value" style="color:${it.pts>0?'var(--primary)':'var(--text-faint)'}">${it.pts}점</div></div>`).join('')}
+    </div>`;
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+
+function exportUploadCSV(){
+  if(!uploadFilteredData.length){alert('데이터가 없습니다.');return;}
+  const cols=['접수번호','성명','희망직무','출신대학','대학등급','대학점수','전공','전공구분','전공점수','학점','학점점수','어학시험','어학성적','어학점수','자격증1','자격증2','자격증점수','인턴','인턴점수','수상','수상점수','석사점수','총점','탈락여부'];
+  let csv='\uFEFF'+cols.join(',')+'\n';
+  uploadFilteredData.forEach(r=>{
+    csv+=cols.map(c=>{let v=String(r[c]||'');if(v.includes(','))v=`"${v}"`;return v;}).join(',')+'\n';
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='업로드채점결과_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+</script>
+
+</body>
+</html>
